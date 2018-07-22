@@ -36,6 +36,29 @@ module.exports = {
 
 ![screenshot](example_table_screenshot.png)
 
+gatsby-config.js looks like this:
+
+```javascript
+module.exports = {
+  plugins: [
+    {
+      resolve: "gatsby-source-azure-storage",
+      options: {
+        tables: [
+          {
+            name: "meetup"
+          },
+          {
+            name: "events",
+            type: "eventTypeName"
+          }
+        ]
+      },
+    }
+  ]
+}
+```
+
 Below is a sample query for fetching the above table's rows.
 
 ```graphql
