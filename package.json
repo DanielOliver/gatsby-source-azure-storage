@@ -6,6 +6,10 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DanielOliver/gatsby-source-azure-storage"
+  },
   "keywords": [
     "gatsby",
     "gatsby-plugin",
@@ -15,5 +19,9 @@
   "license": "ISC",
   "dependencies": {
     "azure-storage": "^2.10.0"
-  }
+  },
+  "bugs": {
+    "url": "https://github.com/DanielOliver/gatsby-source-azure-storage/issues"
+  },
+  "homepage": "https://github.com/DanielOliver/gatsby-source-azure-storage#readme"
 }
