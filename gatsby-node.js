@@ -20,7 +20,7 @@ exports.sourceNodes = (
   const getValueWithDefault = (valueItem, defaultValue) => { return ((valueItem || { _: defaultValue })._ || defaultValue) }
   const getValue = valueItem => getValueWithDefault(valueItem, null)
 
-  function makeNodesFromQuery(tableName) {
+  function makeNodesFromQuery(tableName, typeName) {
     return new Promise(function (resolve, reject) {
       const query = new azure.TableQuery()
       tableSvc.queryEntities(tableName, query, null, function (error, result, response) {
@@ -38,12 +38,11 @@ exports.sourceNodes = (
               parent: null,
               children: [],
               internal: {
-                type: `Meetup`,
+                type: typeName,
                 content: nodeContent,
                 contentDigest: nodeContentDigest,
               },
             })
-            console.log(nodeData)
             createNode(nodeData)
           })
           if (result.continuationToken != null) {
@@ -56,5 +55,5 @@ exports.sourceNodes = (
       })
     })
   }
-  return Promise.all(configOptions.tables.map(x => makeNodesFromQuery(x.name)))
+  return Promise.all(configOptions.tables.map(x => makeNodesFromQuery(x.name, (x.type || x.name))))
 }
