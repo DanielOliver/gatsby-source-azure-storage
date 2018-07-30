@@ -15,45 +15,61 @@ exports.sourceNodes = (
     return null
   }
 
-  var tableSvc = azure.createTableService()
+  let tableService = azure.createTableService()
 
   const getValueWithDefault = (valueItem, defaultValue) => { return ((valueItem || { _: defaultValue })._ || defaultValue) }
   const getValue = valueItem => getValueWithDefault(valueItem, null)
 
   function makeNodesFromQuery(tableName, typeName) {
     return new Promise(function (resolve, reject) {
-      const query = new azure.TableQuery()
-      tableSvc.queryEntities(tableName, query, null, function (error, result, response) {
-        if (!error) {
-          result.entries.forEach(value => {
-            const item = Object.entries(value).reduce((o, prop) => ({ ...o, [prop[0]]: getValue(prop[1]) }), {})
-            const nodeId = createNodeId(`${item.PartitionKey}/${item.RowKey}`)
-            const nodeContent = JSON.stringify(item)
-            const nodeContentDigest = crypto
-              .createHash('md5')
-              .update(nodeContent)
-              .digest('hex')
-            const nodeData = Object.assign(item, {
-              id: nodeId,
-              parent: null,
-              children: [],
-              internal: {
-                type: typeName,
-                content: nodeContent,
-                contentDigest: nodeContentDigest,
-              },
-            })
-            createNode(nodeData)
+      try {
+        const query = new azure.TableQuery()
+
+        function queryWithToken(token) {
+          tableService.queryEntities(tableName, query, token, function (error, result, response) {
+            if (!error) {
+              result.entries.forEach(value => {
+                const item = Object.entries(value).reduce((o, prop) => ({ ...o, [prop[0]]: getValue(prop[1]) }), {})
+                const nodeId = createNodeId(`${item.PartitionKey}/${item.RowKey}`)
+                const nodeContent = JSON.stringify(item)
+                const nodeContentDigest = crypto
+                  .createHash('md5')
+                  .update(nodeContent)
+                  .digest('hex')
+                const nodeData = Object.assign(item, {
+                  id: nodeId,
+                  parent: null,
+                  children: [],
+                  internal: {
+                    type: typeName,
+                    content: nodeContent,
+                    contentDigest: nodeContentDigest,
+                  },
+                })
+                createNode(nodeData)
+              })
+
+              if (result.continuationToken == null) {
+                resolve()
+              } else {
+                queryWithToken(result.continuationToken)
+              }
+            } else {
+              console.error(` Unable to query table "${tableName}"`)
+              reject(error)
+            }
           })
-          if (result.continuationToken != null) {
-            response.continuationToken = result.continuationToken
-          }
-          resolve()
-        } else {
-          reject(error)
         }
-      })
+
+        queryWithToken(null)
+      } catch (err) {
+        console.error(` Error on table "${tableName}"`)
+        reject(err)
+      }
     })
   }
-  return Promise.all(configOptions.tables.map(x => makeNodesFromQuery(x.name, (x.type || x.name))))
+
+  let tablePromises = (configOptions.tables != null && configOptions.tables.length > 0) ? configOptions.tables.map(x => makeNodesFromQuery(x.name, (x.type || x.name))) : []
+
+  return Promise.all(tablePromises)
 }
