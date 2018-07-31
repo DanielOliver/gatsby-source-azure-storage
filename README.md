@@ -19,7 +19,16 @@ module.exports = {
             name: "<tableName2>",
             type: "<tableNameTypeLabel2>"
           }
-        ]
+        ],
+        containers: [
+          {
+            name: "<containerName1>",
+            // If defined, downloads the blobs in this container to this folder.
+            localFolder: 'test2'
+          }
+        ],
+        // If defined, downloads the blobs in all containers above (unless overriden on the container) to this folder.
+        containerLocalFolder: 'test'
       },
     }
   ],
@@ -52,14 +61,23 @@ module.exports = {
             name: "events",
             type: "eventTypeName"
           }
-        ]
+        ],
+        containers: [
+          {
+            name: "container1",
+            // If defined, downloads the files in this container to this folder.
+            localFolder: 'test2'
+          }
+        ],
+        // If defined, downloads the files in all containers (unless overriden on the container) to this folder.
+        containerLocalFolder: 'test'
       },
     }
   ]
 }
 ```
 
-Below is a sample query for fetching the above table's rows.
+Below is a sample query for fetching the above table's rows, as well as the other metadata available.
 
 ```graphql
 query exampleQuery {
@@ -78,7 +96,39 @@ query exampleQuery {
         Country
         Timezone
         Link
-        id  
+        id
+      }
+    }
+  }
+  allAzureContainer {
+    edges {
+      node {
+        id
+        name
+        localFolder
+      }
+    }
+  }
+  allAzureTable {
+    edges {
+      node {
+        name
+        type
+        id
+      }
+    }
+  }
+  allAzureBlob {
+    edges {
+      node {
+        id
+        localPath
+        name
+        container
+        contentMD5
+        blobType
+        creationTime
+        lastModified
       }
     }
   }

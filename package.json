@@ -1,6 +1,6 @@
 {
   "name": "gatsby-source-azure-storage",
-  "version": "0.1.6",
+  "version": "0.2.0",
   "description": "Source plugin for pulling data into Gatsby from Azure Storage.",
   "main": "index.js",
   "scripts": {
@@ -18,7 +18,8 @@
   "author": "Daniel Oliver <danieloliversoftware@gmail.com>",
   "license": "ISC",
   "dependencies": {
-    "azure-storage": "^2.10.0"
+    "azure-storage": "^2.10.0",
+    "mkdirp": "^0.5.1"
   },
   "bugs": {
     "url": "https://github.com/DanielOliver/gatsby-source-azure-storage/issues"
