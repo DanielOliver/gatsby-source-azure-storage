@@ -1,8 +1,8 @@
 const crypto = require("crypto");
 var azure = require('azure-storage');
 var path = require('path');
-var fs = require('fs');
 var mkdirp = require('mkdirp');
+var { createFileNode } = require('gatsby-source-filesystem/create-file-node');
 
 const getValueWithDefault = (valueItem, defaultValue) => { return ((valueItem || { _: defaultValue })._ || defaultValue) }
 const getValue = valueItem => getValueWithDefault(valueItem, null)
@@ -56,14 +56,25 @@ function makeContainerNode(createNode, createNodeId, containerName, localFolder)
   createNode(nodeData)
 }
 
-function downloadBlobFile(blobService, { container, name, localPath }) {
-  mkdirp.sync(path.dirname(localPath));
+function downloadBlobFile(createNode, createNodeId, blobService, { container, name, localPath }) {
+  mkdirp.sync(path.dirname(localPath, createNodeId));
   return new Promise(function (resolve, reject) {
     try {
       blobService.getBlobToLocalFile(container, name, localPath, function (error, result, response) {
         if (!error) {
-          console.log(` Downloaded blob "${name}"`)
-          resolve()
+          createFileNode(localPath, createNodeId, pluginOptions = {
+            name: "gatsby-source-azure-storage"
+          }).then(function (node) {
+
+              let publicUrl = blobService.getUrl(container, name)
+              let nodeWithUrl = Object.assign({ url: publicUrl}, node)
+              createNode(nodeWithUrl)
+
+              resolve()
+            }, function (failure) {
+              console.error(` Failed creating node from blob "${name}" from container "${container}"`)
+              reject(failure)
+            })
         } else {
           console.error(` Failed downloading blob "${name}" from container "${container}"`)
           reject(error)
@@ -216,7 +227,7 @@ exports.sourceNodes = (
         return promiseNode
           .then(values => {
             return Promise.all(values.map(node => {
-              return downloadBlobFile(blobService, node)
+              return downloadBlobFile(createNode, createNodeId, blobService, node)
             }))
           })
       }
