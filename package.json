@@ -20,9 +20,10 @@
   "author": "Daniel Oliver <danieloliversoftware@gmail.com>",
   "license": "ISC",
   "dependencies": {
+    "@azure/storage-blob": "^12.5.0",
     "azure-storage": "^2.10.0",
-    "mkdirp": "^0.5.1",
-    "gatsby-source-filesystem": "^1.5.39"
+    "gatsby-source-filesystem": "^3.2.0",
+    "mkdirp": "^1.0.4"
   },
   "bugs": {
     "url": "https://github.com/DanielOliver/gatsby-source-azure-storage/issues"
