@@ -66,7 +66,7 @@ async function downloadBlobFile(createNode, createNodeId, blobServiceClient, con
 
     const downloadBlockBlobResponse = await blockBlobClient.download(0);
 
-    streamToLocalFile(downloadBlockBlobResponse.readableStreamBody, localPath);
+    await streamToLocalFile(downloadBlockBlobResponse.readableStreamBody, localPath);
 
     createFileNode(localPath, createNodeId, pluginOptions = {
       name: "gatsby-source-azure-storage"
