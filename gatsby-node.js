@@ -1,9 +1,7 @@
 const crypto = require("crypto");
 var azure = require('azure-storage');
-const { BlobServiceClient } = require('@azure/storage-blob');
 var path = require('path');
 var mkdirp = require('mkdirp');
-const fs = require('fs');
 var { createFileNode } = require('gatsby-source-filesystem/create-file-node');
 
 const getValueWithDefault = (valueItem, defaultValue) => { return ((valueItem || { _: defaultValue })._ || defaultValue) }
@@ -58,42 +56,35 @@ function makeContainerNode(createNode, createNodeId, containerName, localFolder)
   createNode(nodeData)
 }
 
-async function downloadBlobFile(createNode, createNodeId, blobServiceClient, containerClient, { container, name, localPath }) {
+function downloadBlobFile(createNode, createNodeId, blobService, { container, name, localPath }) {
   mkdirp.sync(path.dirname(localPath, createNodeId));
+  return new Promise(function (resolve, reject) {
+    try {
+      blobService.getBlobToLocalFile(container, name, localPath, function (error, result, response) {
+        if (!error) {
+          createFileNode(localPath, createNodeId, pluginOptions = {
+            name: "gatsby-source-azure-storage"
+          }).then(function (node) {
 
-  try {
-    let blockBlobClient = containerClient.getBlockBlobClient(name);
+              let publicUrl = blobService.getUrl(container, name)
+              let nodeWithUrl = Object.assign({ url: publicUrl}, node)
+              createNode(nodeWithUrl)
 
-    const downloadBlockBlobResponse = await blockBlobClient.download(0);
-
-    await streamToLocalFile(downloadBlockBlobResponse.readableStreamBody, localPath);
-
-    createFileNode(localPath, createNodeId, pluginOptions = {
-      name: "gatsby-source-azure-storage"
-    }).then(function (node) {      
-      let nodeWithUrl = Object.assign({ url: blockBlobClient.url }, node)
-      createNode(nodeWithUrl)
-    }, function (failure) {
-      console.error(` Failed creating node from blob "${name}" from container "${container}"`)
-    })
-
-  } catch (err) {
-    console.error(` Failed to download blob "${name}" from container "${container}"`)
-  }
-}
-
-async function streamToLocalFile(readableStream, destination) {
-  return new Promise((resolve, reject) => {
-    let buffer = Buffer.from([]);
-    readableStream.on("data", (data) => {
-      buffer = Buffer.concat([buffer, data], buffer.length + data.length);//Add the data read to the existing buffer.
-    });
-    readableStream.on("end", () => {
-      fs.writeFileSync(destination, buffer);//Write buffer to local file.
-      resolve(destination);//Return that file path.  
-    });
-    readableStream.on("error", reject);
-  });
+              resolve()
+            }, function (failure) {
+              console.error(` Failed creating node from blob "${name}" from container "${container}"`)
+              reject(failure)
+            })
+        } else {
+          console.error(` Failed downloading blob "${name}" from container "${container}"`)
+          reject(error)
+        }
+      })
+    } catch (err) {
+      console.error(` Failed to download blob "${name}" from container "${container}"`)
+      reject(err)
+    }
+  })
 }
 
 function makeNodesFromQuery(createNode, createNodeId, tableService, tableName, typeName) {
@@ -145,53 +136,62 @@ function makeNodesFromQuery(createNode, createNodeId, tableService, tableName, t
   })
 }
 
-async function makeNodesFromContainer(createNode, createNodeId, containerClient, containerName, downloadFolder) {
-  try {
-    var nodes = [];
+function makeNodesFromContainer(createNode, createNodeId, blobService, containerName, downloadFolder) {
+  return new Promise(function (resolve, reject) {
+    try {
+      function queryWithToken(token = null, nodes = []) {
+        blobService.listBlobsSegmented(containerName, token, function (error, result, response) {
+          if (!error) {
+            result.entries.forEach(value => {
+              const item = {
+                name: value.name,
+                container: value.container || containerName,
+                contentMD5: value.contentSettings.contentMD5,
+                creationTime: value.creationTime,
+                lastModified: value.lastModified,
+                blobType: value.blobType,
+                serverEncrypted: value.serverEncrypted,
+                localPath: (downloadFolder == null ? null : path.join(process.cwd(), downloadFolder, value.name))
+              }
+              const nodeId = createNodeId(`${value.name}/${value.contentSettings.contentMD5}`)
+              const nodeContent = JSON.stringify(item)
+              const nodeContentDigest = crypto
+                .createHash('md5')
+                .update(nodeContent)
+                .digest('hex')
+              const nodeData = Object.assign(item, {
+                id: nodeId,
+                parent: null,
+                children: [],
+                internal: {
+                  type: 'azureBlob',
+                  content: nodeContent,
+                  contentDigest: nodeContentDigest,
+                },
+              })
+              createNode(nodeData)
 
-    let blobs = await containerClient.listBlobsFlat();
+              nodes.push(nodeData)
+            })
 
-    let blobItem = await blobs.next();
-    while (!blobItem.done) {
-      let value = blobItem.value;
-
-      const item = {
-        name: value.name,
-        container: value.container || containerName,
-        contentMD5: String.fromCharCode(...value.properties.contentMD5),
-        creationTime: value.properties.createdOn,
-        lastModified: value.properties.lastModified,
-        blobType: value.properties.blobType,
-        serverEncrypted: value.properties.serverEncrypted,
-        localPath: (downloadFolder == null ? null : path.join(process.cwd(), downloadFolder, value.name))
+            if (result.continuationToken == null) {
+              resolve(nodes)
+            } else {
+              queryWithToken(result.continuationToken, nodes)
+            }
+          } else {
+            console.error(` Unable to query container "${tableName}"`)
+            reject(error)
+          }
+        })
       }
-      const nodeId = createNodeId(`${value.name}/${item.contentMD5}`)
-      const nodeContent = JSON.stringify(item)
-      const nodeContentDigest = crypto
-        .createHash('md5')
-        .update(nodeContent)
-        .digest('hex')
-      const nodeData = Object.assign(item, {
-        id: nodeId,
-        parent: null,
-        children: [],
-        internal: {
-          type: 'azureBlob',
-          content: nodeContent,
-          contentDigest: nodeContentDigest,
-        },
-      })
-      createNode(nodeData)
 
-      nodes.push(nodeData)
-      blobItem = await blobs.next();
+      queryWithToken()
+    } catch (err) {
+      console.error(` Error on container "${containerName}"`)
+      reject(err)
     }
-
-  } catch (err) {
-    console.error(` Error on container "${containerName}"`)
-  }
-
-  return nodes;
+  })
 }
 
 exports.sourceNodes = (
@@ -204,8 +204,7 @@ exports.sourceNodes = (
   delete configOptions.plugins
 
   let tableService = azure.createTableService()
-  const AZURE_STORAGE_CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
-  const blobServiceClient = BlobServiceClient.fromConnectionString(AZURE_STORAGE_CONNECTION_STRING);
+  let blobService = azure.createBlobService()
 
   let hasTables = configOptions.tables != null && configOptions.tables.length > 0
   let tablePromises = hasTables
@@ -220,9 +219,7 @@ exports.sourceNodes = (
     ? configOptions.containers.map(x => {
       let localFolder = (x.localFolder || configOptions.containerLocalFolder)
       makeContainerNode(createNode, createNodeId, x.name, localFolder)
-
-      const containerClient = blobServiceClient.getContainerClient(x.name);
-      let promiseNode = makeNodesFromContainer(createNode, createNodeId, containerClient, x.name, localFolder)
+      let promiseNode = makeNodesFromContainer(createNode, createNodeId, blobService, x.name, localFolder)
 
       if (localFolder == null) {
         return promiseNode
@@ -230,7 +227,7 @@ exports.sourceNodes = (
         return promiseNode
           .then(values => {
             return Promise.all(values.map(node => {
-              return downloadBlobFile(createNode, createNodeId, blobServiceClient, containerClient, node)
+              return downloadBlobFile(createNode, createNodeId, blobService, node)
             }))
           })
       }
